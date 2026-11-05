@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # El runner de GitHub trae Docker: los tests de Testcontainers (PostgreSQL) se ejecutan de verdad.
+      - name: Compilar y ejecutar tests
+        run: ./mvnw -B verify

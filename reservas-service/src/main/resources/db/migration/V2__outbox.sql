@@ -1,0 +1,1 @@
+-- Tabla outbox: se define en la fase 5 (mensajería).

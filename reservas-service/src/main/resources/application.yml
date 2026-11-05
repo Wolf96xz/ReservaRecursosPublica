@@ -1,0 +1,6 @@
+spring:
+  jpa:
+    open-in-view: false
+    hibernate:
+      # El esquema lo gestiona Flyway; Hibernate solo comprueba que el mapeo encaja con él.
+      ddl-auto: validate
