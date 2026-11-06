@@ -85,10 +85,8 @@ class NotificacionRepositoryTest extends AbstractPersistenceTest {
         Notificacion huerfana = Notificacion.nueva(UUID.randomUUID(), UUID.randomUUID(),
                 TipoNotificacion.RESERVA_CREADA, "ana@example.org", "{}", reloj(T0));
 
-        assertThatThrownBy(() -> {
-            repository.save(huerfana);
-            em.flush();
-        }).isInstanceOf(DataIntegrityViolationException.class);
+        // saveAndFlush pasa por el proxy del repositorio, que traduce la excepción de Hibernate a la de Spring.
+        assertThatThrownBy(() -> repository.saveAndFlush(huerfana)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -97,10 +95,8 @@ class NotificacionRepositoryTest extends AbstractPersistenceTest {
         Notificacion repetida = Notificacion.nueva(primera.getEventId(), UUID.randomUUID(),
                 TipoNotificacion.RESERVA_CREADA, "otra@example.org", "{}", reloj(T0));
 
-        assertThatThrownBy(() -> {
-            repository.save(repetida);
-            em.flush();
-        }).isInstanceOf(DataIntegrityViolationException.class);
+        // saveAndFlush pasa por el proxy del repositorio, que traduce la excepción de Hibernate a la de Spring.
+        assertThatThrownBy(() -> repository.saveAndFlush(repetida)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
