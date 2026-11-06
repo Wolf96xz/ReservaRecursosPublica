@@ -69,7 +69,8 @@ infrastructure/web/         ReservaController, RecursoController, dto/ (records)
                             mapper/ (ReservaMapper, RecursoMapper),
                             GlobalExceptionHandler (@RestControllerAdvice → ProblemDetail)
 infrastructure/persistence/ ReservaRepository, RecursoRepository
-infrastructure/messaging/   OutboxEvent, OutboxRepository, OutboxEventPublisher, OutboxRelay (@Scheduled)
+infrastructure/messaging/   OutboxEvent (record, no entidad JPA), OutboxRepository (JdbcClient + SQL explícito),
+                            OutboxEventPublisher, OutboxRelay (@Scheduled: publica y purga)
 infrastructure/config/      SecurityConfig, KafkaConfig, OpenApiConfig, ClockConfig
 resources/db/migration/     V1__esquema.sql, V2__outbox.sql
 ```
@@ -77,11 +78,14 @@ resources/db/migration/     V1__esquema.sql, V2__outbox.sql
 ### notificaciones-service
 
 ```
-domain/             Notificacion, EstadoNotificacion (PENDIENTE, ENVIADA, FALLIDA), EventoProcesado (eventId)
+domain/             Notificacion, EstadoNotificacion (PENDIENTE, ENVIADA, FALLIDA), TipoNotificacion,
+                    EventoProcesado (eventId)
 application/        NotificacionService, port/NotificationSender
-infrastructure/messaging/   ReservaEventListener (@KafkaListener), KafkaConsumerConfig (reintentos + DLT)
+infrastructure/messaging/   ReservaEventListener (@KafkaListener), KafkaConsumerConfig (reintentos + DLT),
+                            NotificacionReintentos (@Scheduled: reintenta pendientes y fallidas)
 infrastructure/mail/        MailNotificationSender, PlantillaCorreo
 infrastructure/persistence/ NotificacionRepository, EventoProcesadoRepository
+infrastructure/config/      ClockConfig
 ```
 
 ### api-gateway
@@ -118,8 +122,8 @@ El front habla **siempre con el `api-gateway`**, nunca directamente con `reserva
 - `Reserva.cancelar(Clock, PoliticaCancelacion)`: la lógica vive en la entidad (dominio no anémico). Siempre con `Clock` inyectado para tests deterministas.
 - Anti-solapamiento entre reservas distintas del mismo recurso: `@Version` NO basta (son filas distintas). Decidido (ADR 0001): restricción de exclusión en PostgreSQL como garantía real, más una consulta previa (`existeSolapada`) para dar un error de negocio claro.
 - No existe tabla de usuarios: el `usuarioId` sale del claim `sub` del JWT.
-- Escritura de eventos: patrón Outbox. `ReservaService` guarda reserva y `OutboxEvent` en la misma transacción; `OutboxRelay` publica a Kafka con `FOR UPDATE SKIP LOCKED`.
-- Notificaciones: antes de procesar un evento se comprueba `EventoProcesado` (Kafka entrega al menos una vez).
+- Escritura de eventos: patrón Outbox. `ReservaService` guarda reserva y `OutboxEvent` en la misma transacción (el puerto `EventPublisher` exige transacción: `MANDATORY`); `OutboxRelay` publica a Kafka con `FOR UPDATE SKIP LOCKED`, en orden y al menos una vez. Un solo topic (`reservas.eventos`), clave del mensaje = id de la reserva, tipo en la cabecera `eventType`.
+- Notificaciones: el evento se registra en `evento_procesado` con `INSERT ... ON CONFLICT DO NOTHING` (Kafka entrega al menos una vez). Un fallo de envío no se propaga a Kafka: se anota en `notificacion` y se reintenta desde ahí (ADR 0007).
 
 ## API REST (reservas-service)
 
@@ -238,7 +242,7 @@ Restricción `reserva_sin_solape`: `EXCLUDE USING gist (recurso_id WITH =, tstzr
 | `creado_en` | `timestamptz` | NOT NULL |
 | `publicado_en` | `timestamptz` | NULL hasta que `OutboxRelay` lo publica |
 
-Índice parcial `(creado_en) WHERE publicado_en IS NULL`. El relay lee con `FOR UPDATE SKIP LOCKED`. Retención: purgar las filas publicadas con más de N días (el `payload` puede contener el email, que es dato personal).
+Índice parcial `(creado_en) WHERE publicado_en IS NULL`. El relay lee con `FOR UPDATE SKIP LOCKED`. Retención: `OutboxRelay` purga cada día las filas publicadas con más de 7 días (`reservas.outbox.retencion-dias`); el `payload` puede contener el email, que es dato personal. El `payload` es `jsonb` en la base, pero la aplicación lo trata como texto (SQL explícito con `CAST`): no hay entidad JPA para esta tabla.
 
 **Evoluciones previstas** (cada una en una migración nueva, no en `V1`):
 - `recurso`: índice único `(tipo, lower(nombre))`, y `creado_en`.
@@ -263,6 +267,7 @@ erDiagram
         varchar estado
         int intentos
         text ultimo_error
+        text payload
         timestamptz creada_en
         timestamptz enviada_en
     }
@@ -282,14 +287,15 @@ erDiagram
 | `estado` | `varchar(20)` | NOT NULL, CHECK in (`PENDIENTE`,`ENVIADA`,`FALLIDA`) |
 | `intentos` | `int` | NOT NULL, por defecto 0 |
 | `ultimo_error` | `text` | NULL |
+| `payload` | `text` | NOT NULL (el evento original en JSON) |
 | `creada_en` | `timestamptz` | NOT NULL |
 | `enviada_en` | `timestamptz` | NULL |
 
-Índice por `estado` para reintentar las pendientes y fallidas.
+Índice por `estado` para reintentar las pendientes y fallidas. `payload` no estaba en el diseño inicial: hace falta para reintentar un envío fallido, porque el evento ya consta como procesado y Kafka no lo reentregaría. Es `text` y no `jsonb` porque nunca se consulta por su contenido. Contiene el email (como `destinatario`), así que si se purgan notificaciones antiguas hay que tratarlo como dato personal.
 
 ### Origen del email
 
-Como no hay tabla de usuarios, el destinatario no se puede consultar en la base de datos. Por defecto, **el claim `email` del JWT viaja dentro del evento** (`ReservaCreada`/`ReservaCancelada`) y no se guarda en `reserva`. Alternativa descartada por defecto: consultar a Keycloak desde `notificaciones-service` (acopla servicios y añade una dependencia en tiempo de ejecución).
+Como no hay tabla de usuarios, el destinatario no se puede consultar en la base de datos. **El claim `email` del JWT viaja dentro del evento** (`ReservaCreada`/`ReservaCancelada`) y no se guarda en `reserva` (decidido, ADR 0007). Alternativa descartada: consultar a Keycloak desde `notificaciones-service` (acopla servicios y añade una dependencia en tiempo de ejecución). El email es opcional: un token sin ese claim no impide reservar; el evento viaja con `email` nulo y `notificaciones-service` lo da por procesado sin enviar nada.
 
 ## Convenciones de código
 
@@ -364,14 +370,13 @@ Front-end (`frontend/`): unitarios de servicios, guards y del pipe de franjas co
 - Reservas en el pasado prohibidas: `Reserva.crear` rechaza franjas que empiezan antes de `clock.instant()` (400).
 - Identidad del usuario desde el `Principal`; 404 para reservas ajenas (ADR 0003).
 - Seguridad: resource server JWT, roles de realm `CIUDADANO`/`GESTOR`/`ADMIN`, alta de recursos solo para gestor y admin (ADR 0006). Probado con JWT simulados; **sin Keycloak real todavía**.
+- Mensajería: Outbox transaccional, entrega al menos una vez, consumidor idempotente por `eventId`, DLT para mensajes ilegibles y reintento de correos desde la tabla `notificacion`. El email viaja en el evento (claim `email` del JWT, opcional). Retención del outbox: 7 días (ADR 0007). Probado con mocks; los tests con Kafka real solo corren en el CI.
 - Front-end en **Angular**. ADR 0004 por redactar (fijar la versión de Angular y Node).
 - Una base de datos por servicio, sin FKs entre servicios. ADR 0005 por redactar (ver "Modelo de datos").
 
 **Pendientes** (valor por defecto entre paréntesis)
 - Gateway MVC frente a WebFlux (MVC).
 - Spring Boot 4.1.x frente a 3.5.x (4.1.x; bajar a 3.5.x solo si hay fricción seria de dependencias).
-- Origen del email de las notificaciones (claim `email` del JWT dentro del evento; ver "Modelo de datos").
-- Retención del outbox (purgar publicados con más de 7 días).
 
 Cada decisión relevante se registra como ADR en `docs/adr/`.
 
