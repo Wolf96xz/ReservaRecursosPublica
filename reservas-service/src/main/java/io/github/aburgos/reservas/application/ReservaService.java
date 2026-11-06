@@ -14,6 +14,7 @@ import io.github.aburgos.reservas.event.ReservaCancelada;
 import io.github.aburgos.reservas.event.ReservaCreada;
 import io.github.aburgos.reservas.infrastructure.persistence.RecursoRepository;
 import io.github.aburgos.reservas.infrastructure.persistence.ReservaRepository;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +57,10 @@ public class ReservaService {
         Reserva guardada;
         try {
             guardada = reservas.saveAndFlush(reserva);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException | CannotAcquireLockException e) {
+            // Dos inserciones concurrentes sobre la misma franja pueden acabar en violación de la restricción de
+            // exclusión o, a veces, en un deadlock que PostgreSQL resuelve abortando a una: en ambos casos la
+            // otra transacción está insertando una franja en conflicto, así que para la perdedora es un solape.
             throw solapada(recurso.getId(), franja);
         }
         // Mismo @Transactional que el guardado: o se confirman la reserva y su evento, o ninguno de los dos.

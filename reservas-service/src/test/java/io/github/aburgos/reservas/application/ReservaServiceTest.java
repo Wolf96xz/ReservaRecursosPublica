@@ -25,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
@@ -190,6 +191,19 @@ class ReservaServiceTest {
 
         assertThatThrownBy(() -> service().crear(new CrearReservaCommand(r.getId(), "u", INICIO, FIN)))
                 .isInstanceOf(ReservaSolapadaException.class);
+    }
+
+    @Test
+    void crearTraduceUnDeadlockDeLaBaseDeDatosEnSolapeYNoPublicaEvento() {
+        // PostgreSQL puede resolver dos inserciones concurrentes en conflicto abortando a una con deadlock.
+        Recurso r = recurso();
+        when(recursos.findById(r.getId())).thenReturn(Optional.of(r));
+        when(reservas.existeSolapada(r.getId(), INICIO, FIN)).thenReturn(false);
+        when(reservas.saveAndFlush(any(Reserva.class))).thenThrow(new CannotAcquireLockException("deadlock detected"));
+
+        assertThatThrownBy(() -> service().crear(new CrearReservaCommand(r.getId(), "u", INICIO, FIN)))
+                .isInstanceOf(ReservaSolapadaException.class);
+        verify(eventos, never()).publicar(any());
     }
 
     @Test
