@@ -1,6 +1,6 @@
 # 0003. Identidad del usuario y acceso a reservas ajenas
 
-**Estado:** aceptada (provisional hasta la fase 4)
+**Estado:** aceptada (la seguridad real se añadió en la fase 4: ver ADR 0006)
 
 ## Contexto
 
@@ -17,5 +17,6 @@ No existe tabla de usuarios: el identificador sale del claim `sub` del JWT de Ke
 
 ## Consecuencias
 
-- Los roles de gestor y administrador (ver o cancelar reservas ajenas) se añadirán en la fase 4.
-- Los tests usan `user()` y `csrf()` de Spring Security Test mientras no haya `SecurityConfig` propia.
+- Los roles existen desde la fase 4 (ADR 0006), pero gestor y administrador **todavía no** pueden ver ni
+  cancelar reservas ajenas: queda pendiente (requiere `cancelada_por`).
+- Los tests usan JWT simulados (`TestJwt`) en lugar de `user()` y `csrf()`.

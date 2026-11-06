@@ -5,13 +5,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static io.github.aburgos.reservas.TestJwt.ciudadano;
+import static io.github.aburgos.reservas.TestJwt.gestor;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,8 +30,13 @@ class ReservaFlujoIntegrationTest extends AbstractIntegrationTest {
 
     private final JsonMapper json = JsonMapper.builder().build();
 
+    /** El recurso lo crea un gestor; las reservas, ciudadanos (el usuario es el claim sub). */
+    private static RequestPostProcessor token(String usuario) {
+        return "gestor".equals(usuario) ? gestor(usuario) : ciudadano(usuario);
+    }
+
     private MockHttpServletRequestBuilder postJson(String url, String usuario, String cuerpo) {
-        return post(url).with(user(usuario)).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(cuerpo);
+        return post(url).with(token(usuario)).contentType(MediaType.APPLICATION_JSON).content(cuerpo);
     }
 
     private String crearRecurso() throws Exception {
@@ -68,7 +74,7 @@ class ReservaFlujoIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated());
 
         // Otro usuario no ve ni cancela la reserva ajena
-        mvc.perform(get("/api/reservas/" + reservaId).with(user("user-2"))).andExpect(status().isNotFound());
+        mvc.perform(get("/api/reservas/" + reservaId).with(ciudadano("user-2"))).andExpect(status().isNotFound());
         mvc.perform(postJson("/api/reservas/" + reservaId + "/cancelar", "user-2", "")).andExpect(status().isNotFound());
 
         // El dueño la cancela: con el reloj fijo (2026-01-05) faltan más de 24 h para la franja

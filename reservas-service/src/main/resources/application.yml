@@ -4,3 +4,10 @@ spring:
     hibernate:
       # El esquema lo gestiona Flyway; Hibernate solo comprueba que el mapeo encaja con él.
       ddl-auto: validate
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Con issuer-uri el decodificador es perezoso: no contacta con Keycloak al arrancar, solo al
+          # validar el primer token. Por eso la app (y los tests) arrancan sin Keycloak.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/reservas}

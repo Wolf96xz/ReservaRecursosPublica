@@ -363,6 +363,7 @@ Front-end (`frontend/`): unitarios de servicios, guards y del pipe de franjas co
 - Horario semanal fijo; reservas que cruzan medianoche prohibidas (ADR 0002).
 - Reservas en el pasado prohibidas: `Reserva.crear` rechaza franjas que empiezan antes de `clock.instant()` (400).
 - Identidad del usuario desde el `Principal`; 404 para reservas ajenas (ADR 0003).
+- Seguridad: resource server JWT, roles de realm `CIUDADANO`/`GESTOR`/`ADMIN`, alta de recursos solo para gestor y admin (ADR 0006). Probado con JWT simulados; **sin Keycloak real todavía**.
 - Front-end en **Angular**. ADR 0004 por redactar (fijar la versión de Angular y Node).
 - Una base de datos por servicio, sin FKs entre servicios. ADR 0005 por redactar (ver "Modelo de datos").
 

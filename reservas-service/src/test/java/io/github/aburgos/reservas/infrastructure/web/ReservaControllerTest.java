@@ -11,12 +11,14 @@ import io.github.aburgos.reservas.domain.exception.ReservaSolapadaException;
 import io.github.aburgos.reservas.domain.model.EstadoReserva;
 import io.github.aburgos.reservas.domain.model.FranjaHoraria;
 import io.github.aburgos.reservas.domain.model.Reserva;
+import io.github.aburgos.reservas.infrastructure.config.SecurityConfig;
 import io.github.aburgos.reservas.infrastructure.web.mapper.ReservaMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,8 +29,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static io.github.aburgos.reservas.TestJwt.ciudadano;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -36,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ReservaController.class)
-@Import({ReservaMapper.class, GlobalExceptionHandler.class})
+@Import({ReservaMapper.class, GlobalExceptionHandler.class, SecurityConfig.class})
 class ReservaControllerTest {
 
     private static final UUID RECURSO = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -49,6 +50,10 @@ class ReservaControllerTest {
     @MockitoBean
     ReservaService service;
 
+    /** Lo exige el resource server; con el jwt() de los tests no se usa, pero el bean debe existir. */
+    @MockitoBean
+    JwtDecoder jwtDecoder;
+
     private static Reserva reserva(String usuario) {
         return new Reserva(UUID.fromString("22222222-2222-2222-2222-222222222222"), RECURSO, usuario,
                 new FranjaHoraria(INICIO, FIN), EstadoReserva.CONFIRMADA,
@@ -60,7 +65,7 @@ class ReservaControllerTest {
              "inicio": "2026-01-12T10:00:00Z", "fin": "2026-01-12T11:00:00Z"}""";
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder crear(String cuerpo) {
-        return post("/api/reservas").with(user("user-1")).with(csrf())
+        return post("/api/reservas").with(ciudadano("user-1"))
                 .contentType(MediaType.APPLICATION_JSON).content(cuerpo);
     }
 
@@ -139,7 +144,7 @@ class ReservaControllerTest {
 
     @Test
     void crearSinAutenticarDevuelve401() throws Exception {
-        mvc.perform(post("/api/reservas").with(csrf())
+        mvc.perform(post("/api/reservas")
                         .contentType(MediaType.APPLICATION_JSON).content(CUERPO_VALIDO))
                 .andExpect(status().isUnauthorized());
     }
@@ -149,7 +154,7 @@ class ReservaControllerTest {
         when(service.obtener(UUID.fromString("22222222-2222-2222-2222-222222222222"), "user-1"))
                 .thenReturn(reserva("user-1"));
 
-        mvc.perform(get("/api/reservas/22222222-2222-2222-2222-222222222222").with(user("user-1")))
+        mvc.perform(get("/api/reservas/22222222-2222-2222-2222-222222222222").with(ciudadano("user-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.usuarioId").value("user-1"));
     }
@@ -159,7 +164,7 @@ class ReservaControllerTest {
         UUID id = UUID.randomUUID();
         when(service.obtener(id, "user-1")).thenThrow(new ReservaNoEncontradaException(id));
 
-        mvc.perform(get("/api/reservas/" + id).with(user("user-1")))
+        mvc.perform(get("/api/reservas/" + id).with(ciudadano("user-1")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -168,7 +173,7 @@ class ReservaControllerTest {
     void listarDevuelveLasReservasDelUsuario() throws Exception {
         when(service.listarDelUsuario("user-1")).thenReturn(List.of(reserva("user-1")));
 
-        mvc.perform(get("/api/reservas").with(user("user-1")))
+        mvc.perform(get("/api/reservas").with(ciudadano("user-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
     }
@@ -181,7 +186,7 @@ class ReservaControllerTest {
         when(service.cancelar(any(CancelarReservaCommand.class))).thenReturn(cancelada);
 
         mvc.perform(post("/api/reservas/22222222-2222-2222-2222-222222222222/cancelar")
-                        .with(user("user-1")).with(csrf()))
+                        .with(ciudadano("user-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("CANCELADA"));
     }
@@ -192,7 +197,7 @@ class ReservaControllerTest {
                 .thenThrow(new CancelacionNoPermitidaException("fuera de plazo"));
 
         mvc.perform(post("/api/reservas/22222222-2222-2222-2222-222222222222/cancelar")
-                        .with(user("user-1")).with(csrf()))
+                        .with(ciudadano("user-1")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Cancelación no permitida"));
     }

@@ -7,6 +7,7 @@ import io.github.aburgos.reservas.domain.model.FranjaApertura;
 import io.github.aburgos.reservas.domain.model.HorarioApertura;
 import io.github.aburgos.reservas.domain.model.Recurso;
 import io.github.aburgos.reservas.domain.model.TipoRecurso;
+import io.github.aburgos.reservas.infrastructure.config.SecurityConfig;
 import io.github.aburgos.reservas.infrastructure.web.mapper.RecursoMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -28,15 +30,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static io.github.aburgos.reservas.TestJwt.ciudadano;
+import static io.github.aburgos.reservas.TestJwt.gestor;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(RecursoController.class)
-@Import({RecursoMapper.class, GlobalExceptionHandler.class})
+@Import({RecursoMapper.class, GlobalExceptionHandler.class, SecurityConfig.class})
 class RecursoControllerTest {
 
     @Autowired
@@ -45,13 +47,17 @@ class RecursoControllerTest {
     @MockitoBean
     RecursoService service;
 
+    /** Lo exige el resource server; con el jwt() de los tests no se usa, pero el bean debe existir. */
+    @MockitoBean
+    JwtDecoder jwtDecoder;
+
     private static Recurso recurso() {
         return Recurso.crear("Pista 1", TipoRecurso.PISTA, new HorarioApertura(List.of(
                 new FranjaApertura(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(21, 0)))));
     }
 
     private MockHttpServletRequestBuilder crear(String cuerpo) {
-        return post("/api/recursos").with(user("gestor")).with(csrf())
+        return post("/api/recursos").with(gestor("gestor"))
                 .contentType(MediaType.APPLICATION_JSON).content(cuerpo);
     }
 
@@ -119,7 +125,7 @@ class RecursoControllerTest {
         UUID id = UUID.randomUUID();
         when(service.obtener(id)).thenThrow(new RecursoNoEncontradoException(id));
 
-        mvc.perform(get("/api/recursos/" + id).with(user("u")))
+        mvc.perform(get("/api/recursos/" + id).with(ciudadano("u")))
                 .andExpect(status().isNotFound());
     }
 
@@ -127,7 +133,7 @@ class RecursoControllerTest {
     void listarDevuelveLosRecursos() throws Exception {
         when(service.listar()).thenReturn(List.of(recurso(), recurso()));
 
-        mvc.perform(get("/api/recursos").with(user("u")))
+        mvc.perform(get("/api/recursos").with(ciudadano("u")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
     }
