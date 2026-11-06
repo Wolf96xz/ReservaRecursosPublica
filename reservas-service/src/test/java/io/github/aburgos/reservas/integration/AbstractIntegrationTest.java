@@ -3,7 +3,6 @@ package io.github.aburgos.reservas.integration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -16,7 +15,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers(disabledWithoutDocker = true)
 abstract class AbstractIntegrationTest {
 
-    @Container
+    /** Contenedor singleton por JVM; ver la explicación en AbstractPersistenceTest. */
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
+
+    static {
+        POSTGRES.start();
+    }
 }

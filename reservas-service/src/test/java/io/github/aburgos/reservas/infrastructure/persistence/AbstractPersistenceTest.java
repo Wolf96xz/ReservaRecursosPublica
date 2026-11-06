@@ -3,7 +3,6 @@ package io.github.aburgos.reservas.infrastructure.persistence;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -16,7 +15,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers(disabledWithoutDocker = true)
 abstract class AbstractPersistenceTest {
 
-    @Container
+    /**
+     * Contenedor singleton compartido por todas las clases de test de la JVM. No lleva {@code @Container}:
+     * con ese ciclo de vida se pararía al acabar cada clase, mientras Spring conserva el contexto en caché
+     * apuntando a un contenedor muerto (y la siguiente clase fallaría esperando una conexión).
+     * El bloque estático solo se ejecuta si los tests corren; sin Docker la clase se omite antes.
+     * Ryuk lo elimina al terminar la JVM.
+     */
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
+
+    static {
+        POSTGRES.start();
+    }
 }
