@@ -7,7 +7,7 @@ mensajería, seguridad, testing serio, CI/CD y observabilidad.
 ## Stack
 
 Java 21 · Spring Boot 4.1 · PostgreSQL + Flyway · Apache Kafka · Keycloak (OAuth2/OIDC) ·
-springdoc-openapi · JUnit 5, Mockito, AssertJ, Testcontainers, ArchUnit · GitHub Actions ·
+Angular · springdoc-openapi · JUnit 5, Mockito, AssertJ, Testcontainers, ArchUnit · GitHub Actions ·
 Docker · Micrometer / Prometheus / Grafana.
 
 ## Módulos
@@ -18,6 +18,7 @@ Docker · Micrometer / Prometheus / Grafana.
 | `reservas-service` | Núcleo: recursos, reservas, reglas de negocio y API REST. |
 | `notificaciones-service` | Consume eventos de Kafka y envía correos. |
 | `api-gateway` | Entrada única: enrutado, validación JWT y filtros transversales. |
+| `frontend` | Aplicación Angular (no es módulo Maven). Pendiente. |
 
 Cada servicio se organiza en tres capas (`domain`, `application`, `infrastructure`); la regla de
 dependencias se comprueba con un test ArchUnit.
@@ -28,11 +29,12 @@ dependencias se comprueba con un test ArchUnit.
 |---|---|---|
 | 1 | Dominio puro | Hecha |
 | 2 | Persistencia (Flyway, JPA, restricción anti-solapamiento) | Hecha |
-| 3 | Casos de uso y API REST | Hecha |
+| 3 | Casos de uso y API REST | Hecha (tests de persistencia/integración pendientes de verificar en CI) |
 | 4 | Seguridad con Keycloak | Pendiente |
 | 5 | Mensajería: Outbox, Kafka, notificaciones | Pendiente |
 | 6 | Gateway | Pendiente |
-| 7 | Docker, docker-compose y observabilidad | Pendiente |
+| 7 | Front-end Angular | Pendiente |
+| 8 | Docker, docker-compose y observabilidad | Pendiente |
 
 ## Reglas de negocio destacadas
 
@@ -42,6 +44,7 @@ dependencias se comprueba con un test ArchUnit.
 - Dos reservas confirmadas del mismo recurso no pueden solaparse; lo garantiza una restricción de
   exclusión de PostgreSQL, no solo la lógica de aplicación.
 - Una reserva solo puede cancelarse con una antelación mínima (24 h por defecto).
+- No se puede reservar en el pasado: la franja no puede empezar antes del instante actual (400).
 
 ## Cómo ejecutar los tests
 
