@@ -19,7 +19,8 @@ a la vez.
   la violación de la restricción (`DataIntegrityViolationException`) o, a veces, un deadlock entre las
   dos inserciones, que PostgreSQL resuelve abortando a una (`CannotAcquireLockException`). Se descubrió en el CI:
   `ReservaConcurrenciaIntegrationTest` falló de forma intermitente y, sin esta traducción, el cliente habría recibido un 500.
-  Sigue siendo un solape para la perdedora: la otra transacción está insertando una franja en conflicto.- Rango semiabierto `[)`: franjas contiguas son válidas. Las reservas canceladas quedan fuera y liberan la franja.
+  Sigue siendo un solape para la perdedora: la otra transacción está insertando una franja en conflicto.
+- Rango semiabierto `[)`: franjas contiguas son válidas. Las reservas canceladas quedan fuera y liberan la franja.
 
 ## Alternativa descartada
 
