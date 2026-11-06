@@ -71,10 +71,20 @@ class ReservaFlujoIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/reservas/" + reservaId).with(user("user-2"))).andExpect(status().isNotFound());
         mvc.perform(postJson("/api/reservas/" + reservaId + "/cancelar", "user-2", "")).andExpect(status().isNotFound());
 
-        // El dueño la cancela (la reserva es de 2026-01-12: el reloj real ya está pasado, por eso se prueba aparte
-        // la regla de plazo en los tests unitarios; aquí solo se comprueba que el endpoint responde con un estado de negocio)
+        // El dueño la cancela: con el reloj fijo (2026-01-05) faltan más de 24 h para la franja
         mvc.perform(postJson("/api/reservas/" + reservaId + "/cancelar", "user-1", ""))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("CANCELADA"));
+    }
+
+    @Test
+    void reservaEnElPasadoDevuelve400() throws Exception {
+        String recursoId = crearRecurso();
+
+        // Lunes 2025-12-29, dentro de horario pero anterior al reloj fijo
+        mvc.perform(postJson("/api/reservas", "user-1", cuerpoReserva(recursoId,
+                        "\"inicio\": \"2025-12-29T10:00:00Z\", \"fin\": \"2025-12-29T11:00:00Z\"")))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

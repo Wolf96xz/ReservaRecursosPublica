@@ -73,6 +73,19 @@ class ReservaTest {
     }
 
     @Test
+    void crearFallaSiLaFranjaEmpiezaEnElPasado() {
+        assertThatThrownBy(() -> Reserva.crear(recurso(), "u", FRANJA, reloj("2026-01-12T10:00:01Z")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("pasado");
+    }
+
+    @Test
+    void crearPermiteUnaFranjaQueEmpiezaExactamenteAhora() {
+        Reserva res = Reserva.crear(recurso(), "u", FRANJA, reloj("2026-01-12T10:00:00Z"));
+        assertThat(res.getEstado()).isEqualTo(EstadoReserva.CONFIRMADA);
+    }
+
+    @Test
     void crearRechazaUsuarioVacioONulo() {
         assertThatThrownBy(() -> Reserva.crear(recurso(), " ", FRANJA, reloj("2026-01-05T09:00:00Z")))
                 .isInstanceOf(IllegalArgumentException.class);

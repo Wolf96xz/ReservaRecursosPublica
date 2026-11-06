@@ -67,7 +67,8 @@ public class Reserva {
     }
 
     /**
-     * Crea una reserva CONFIRMADA tras validar el recurso (activo y dentro de horario).
+     * Crea una reserva CONFIRMADA tras validar el recurso (activo y dentro de horario) y que la
+     * franja no empiece en el pasado respecto al {@code Clock} (empezar justo ahora es válido).
      * La comprobación de solapamiento con otras reservas requiere consultar el repositorio
      * y se hace en la capa de aplicación (más la restricción en base de datos).
      */
@@ -75,8 +76,13 @@ public class Reserva {
         Objects.requireNonNull(recurso, "recurso es obligatorio");
         Objects.requireNonNull(clock, "clock es obligatorio");
         recurso.validarReserva(franja);
+        Instant ahora = clock.instant();
+        if (franja.inicio().isBefore(ahora)) {
+            throw new IllegalArgumentException("No se puede reservar en el pasado: la franja empieza el "
+                    + franja.inicio() + " y ahora es " + ahora);
+        }
         return new Reserva(UUID.randomUUID(), recurso.getId(), usuarioId, franja,
-                EstadoReserva.CONFIRMADA, clock.instant(), null);
+                EstadoReserva.CONFIRMADA, ahora, null);
     }
 
     /**
