@@ -17,7 +17,7 @@ Docker · Micrometer / Prometheus / Grafana.
 | `common` | Contratos compartidos: eventos y constantes. |
 | `reservas-service` | Núcleo: recursos, reservas, reglas de negocio y API REST. |
 | `notificaciones-service` | Consume eventos de Kafka y envía correos. |
-| `api-gateway` | Entrada única: enrutado, validación JWT y filtros transversales. |
+| `api-gateway` | Entrada única: enrutado, validación JWT, CORS y filtros transversales (puerto 8080). |
 | `frontend` | Aplicación Angular (no es módulo Maven). Pendiente. |
 
 Cada servicio se organiza en tres capas (`domain`, `application`, `infrastructure`); la regla de
@@ -32,7 +32,7 @@ dependencias se comprueba con un test ArchUnit.
 | 3 | Casos de uso y API REST | Hecha (los tests de persistencia e integración solo corren en el CI) |
 | 4 | Seguridad: resource server JWT y roles de Keycloak | Hecha (probada con JWT simulados; sin Keycloak real todavía) |
 | 5 | Mensajería: Outbox, Kafka, notificaciones (idempotencia, reintentos, DLT) | Hecha (los tests con Kafka real solo corren en el CI) |
-| 6 | Gateway | Pendiente (hay un esqueleto sin tests) |
+| 6 | Gateway: enrutado, JWT, CORS, correlación y registro | Hecha (probada con backend falso y JWT simulados; sin Keycloak ni `reservas-service` reales) |
 | 7 | Front-end Angular | Pendiente |
 | 8 | Docker, docker-compose y observabilidad | Pendiente |
 

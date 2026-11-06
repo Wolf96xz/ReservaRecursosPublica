@@ -51,8 +51,7 @@ sin pasar por el gateway.
 - **Sin verificar todavía:** la compatibilidad en ejecución de Spring Cloud Gateway 5.0.2 con Boot 4.1.1
   (hoy solo se ha comprobado que el starter resuelve) y el comportamiento contra un Keycloak real. Los tests del
   gateway usarán JWT simulados y un backend falso; lo demás se comprobará con `docker-compose` (fase 8).
-- Cambiar `reservas-service` al puerto `8081` es una modificación de su configuración que queda para la
-  implementación; hasta entonces ambos usarían el `8080` por defecto.
+- `reservas-service` escucha en el `8081` (configurable con `SERVER_PORT`), para no chocar con el gateway.
 - El `X-Correlation-Id` llega al backend, pero los servicios aún no lo leen ni lo incluyen en sus logs; ese
   aprovechamiento completo llega con la observabilidad (fase 8).
 
