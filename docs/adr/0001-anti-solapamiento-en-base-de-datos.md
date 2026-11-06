@@ -15,7 +15,11 @@ a la vez.
   (requiere la extensión `btree_gist`).
 - Además, `ReservaService` consulta antes (`existeSolapada`) para devolver un error de negocio claro en el
   caso normal. Si la restricción salta (carrera), se traduce a `ReservaSolapadaException`.
-- Rango semiabierto `[)`: franjas contiguas son válidas. Las reservas canceladas quedan fuera y liberan la franja.
+- La carrera puede terminar de dos formas, y las dos se traducen a `ReservaSolapadaException` (409):
+  la violación de la restricción (`DataIntegrityViolationException`) o, a veces, un deadlock entre las
+  dos inserciones, que PostgreSQL resuelve abortando a una (`CannotAcquireLockException`). Se descubrió en el CI:
+  `ReservaConcurrenciaIntegrationTest` falló de forma intermitente y, sin esta traducción, el cliente habría recibido un 500.
+  Sigue siendo un solape para la perdedora: la otra transacción está insertando una franja en conflicto.- Rango semiabierto `[)`: franjas contiguas son válidas. Las reservas canceladas quedan fuera y liberan la franja.
 
 ## Alternativa descartada
 
