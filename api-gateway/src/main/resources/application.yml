@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Con issuer-uri el decodificador es perezoso: el gateway arranca sin Keycloak y solo lo contacta
+          # al validar el primer token. Debe ser el mismo emisor que valida reservas-service.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/reservas}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+gateway:
+  # Servicio al que se enruta /api/recursos/** y /api/reservas/**.
+  reservas:
+    url: ${RESERVAS_SERVICE_URL:http://localhost:8081}
+  cors:
+    # Orígenes del front permitidos, separados por comas. Nunca "*".
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
