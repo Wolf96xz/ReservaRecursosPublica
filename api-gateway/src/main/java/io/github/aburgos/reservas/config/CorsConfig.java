@@ -1,5 +1,6 @@
 package io.github.aburgos.reservas.config;
 
+import io.github.aburgos.reservas.filter.CorrelationIdFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,17 +17,15 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    private static final String ID_CORRELACION = "X-Correlation-Id";
-
     @Bean
     CorsConfigurationSource corsConfigurationSource(
             @Value("${gateway.cors.allowed-origins}") List<String> origenesPermitidos) {
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(origenesPermitidos);
         cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
-        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", ID_CORRELACION));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", CorrelationIdFilter.HEADER));
         // Sin esto el front no puede leer el id de correlación de la respuesta.
-        cors.setExposedHeaders(List.of(ID_CORRELACION));
+        cors.setExposedHeaders(List.of(CorrelationIdFilter.HEADER));
         cors.setAllowCredentials(false);
         cors.setMaxAge(3600L);
 

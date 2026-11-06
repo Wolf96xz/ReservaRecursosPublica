@@ -1,26 +1,9 @@
 package io.github.aburgos.reservas;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.jwt.BadJwtException;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-
-import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -28,50 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Enrutado, seguridad y CORS del gateway contra su cadena real, con un backend falso y JWT simulados
- * (el {@code JwtDecoder} se sustituye; no hay Keycloak, ADR 0008).
- */
-@SpringBootTest
-@AutoConfigureMockMvc
-class GatewayRoutingTest {
-
-    private static final String ORIGEN_FRONT = "http://localhost:4200";
-    private static final String TOKEN_VALIDO = "token-valido";
-
-    private static final BackendFalso BACKEND = new BackendFalso();
-
-    @DynamicPropertySource
-    static void propiedades(DynamicPropertyRegistry registry) {
-        registry.add("gateway.reservas.url", BACKEND::url);
-        registry.add("gateway.cors.allowed-origins", () -> ORIGEN_FRONT);
-    }
-
-    @AfterAll
-    static void cerrarBackend() {
-        BACKEND.close();
-    }
-
-    @Autowired
-    MockMvc mvc;
-
-    @MockitoBean
-    JwtDecoder jwtDecoder;
-
-    @BeforeEach
-    void preparar() {
-        BACKEND.limpiar();
-        Instant ahora = Instant.now();
-        Jwt jwt = Jwt.withTokenValue(TOKEN_VALIDO).header("alg", "none").subject("user-1")
-                .issuedAt(ahora).expiresAt(ahora.plusSeconds(60)).build();
-        when(jwtDecoder.decode(anyString())).thenThrow(new BadJwtException("token no válido"));
-        // doReturn: con when(...) se ejecutaría la llamada y saltaría el stub genérico de arriba.
-        doReturn(jwt).when(jwtDecoder).decode(TOKEN_VALIDO);
-    }
-
-    private static String bearer() {
-        return "Bearer " + TOKEN_VALIDO;
-    }
+/** Enrutado, seguridad y CORS del gateway contra su cadena real (ver {@link GatewayTestBase}). */
+class GatewayRoutingTest extends GatewayTestBase {
 
     @Test
     void sinTokenDevuelve401YNoLlegaAlBackend() throws Exception {
