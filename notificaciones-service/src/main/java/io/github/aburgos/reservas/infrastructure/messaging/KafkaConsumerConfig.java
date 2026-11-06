@@ -2,6 +2,8 @@ package io.github.aburgos.reservas.infrastructure.messaging;
 
 import io.github.aburgos.reservas.event.Topics;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
@@ -26,11 +28,21 @@ public class KafkaConsumerConfig {
 
     @Bean
     DefaultErrorHandler errorHandler(KafkaTemplate<String, String> kafka) {
-        // Publica en "<topic>.DLT" y en la misma partición que el original, por eso el DLT tiene las mismas.
         DefaultErrorHandler handler = new DefaultErrorHandler(
-                new DeadLetterPublishingRecoverer(kafka), new FixedBackOff(1000L, 3L));
+                new DeadLetterPublishingRecoverer(kafka, KafkaConsumerConfig::destinoDlt),
+                new FixedBackOff(1000L, 3L));
         handler.addNotRetryableExceptions(IllegalArgumentException.class, JacksonException.class);
         return handler;
+    }
+
+    /**
+     * Destino explícito: siempre {@link #TOPIC_DLT} y la misma partición que el mensaje original (por eso el
+     * DLT tiene las mismas particiones). No se usa el nombre por defecto de Spring Kafka porque depende de la
+     * versión: en esta es {@code <topic>-dlt}, no {@code <topic>.DLT}, y los mensajes habrían ido a un topic
+     * que nadie creó ni vigila.
+     */
+    static TopicPartition destinoDlt(ConsumerRecord<?, ?> registro, Exception error) {
+        return new TopicPartition(TOPIC_DLT, registro.partition());
     }
 
     @Bean
