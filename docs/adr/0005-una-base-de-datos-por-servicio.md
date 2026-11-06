@@ -30,6 +30,10 @@ de usuarios: la identidad viene del claim `sub` del JWT (ADR 0003).
 - Las consultas que cruzan servicios (p. ej. "notificaciones de mis reservas") no se pueden resolver con un
   join; habría que añadir una API o una proyección propia.
 - Hay que crear las dos bases al provisionar PostgreSQL (tarea de la fase 8, `docker-compose`).
+- Estado de la configuración: `notificaciones-service` ya apunta a su base (`DB_HOST`, `DB_PORT`, `DB_NAME`,
+  por defecto `notificaciones`). `reservas-service` todavía no define `spring.datasource` en su
+  `application.yml` (los tests usan Testcontainers); hay que añadirlo, con `reservas` como base, antes de
+  arrancarlo contra una instancia real.
 - Compartir instancia significa que una caída o saturación de PostgreSQL afecta a ambos servicios. Pasar a
   instancias separadas no exigiría cambios de código, solo de configuración (`DB_HOST`, `DB_NAME`).
 
