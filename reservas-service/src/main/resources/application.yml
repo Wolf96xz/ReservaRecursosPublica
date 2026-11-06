@@ -1,4 +1,9 @@
 spring:
+  datasource:
+    # Base propia del servicio (sin FKs ni joins con la de notificaciones). Los valores por defecto son de desarrollo local.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:reservas}
+    username: ${DB_USER:reservas}
+    password: ${DB_PASSWORD:reservas}
   jpa:
     open-in-view: false
     hibernate:
