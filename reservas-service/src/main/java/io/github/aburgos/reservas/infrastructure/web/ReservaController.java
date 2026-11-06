@@ -8,6 +8,8 @@ import io.github.aburgos.reservas.infrastructure.web.dto.ReservaResponse;
 import io.github.aburgos.reservas.infrastructure.web.mapper.ReservaMapper;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,8 +39,9 @@ public class ReservaController {
     }
 
     @PostMapping
-    public ResponseEntity<ReservaResponse> crear(@Valid @RequestBody ReservaRequest request, Principal principal) {
-        Reserva reserva = service.crear(mapper.toCommand(request, principal.getName()));
+    public ResponseEntity<ReservaResponse> crear(@Valid @RequestBody ReservaRequest request,
+                                                 Principal principal, @AuthenticationPrincipal Jwt jwt) {
+        Reserva reserva = service.crear(mapper.toCommand(request, principal.getName(), emailDe(jwt)));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(reserva.getId()).toUri();
         return ResponseEntity.created(location).body(mapper.toResponse(reserva));
@@ -56,7 +59,13 @@ public class ReservaController {
 
     /** La cancelación es una transición de estado (la reserva se conserva), no un borrado. */
     @PostMapping("/{id}/cancelar")
-    public ReservaResponse cancelar(@PathVariable UUID id, Principal principal) {
-        return mapper.toResponse(service.cancelar(new CancelarReservaCommand(id, principal.getName())));
+    public ReservaResponse cancelar(@PathVariable UUID id, Principal principal, @AuthenticationPrincipal Jwt jwt) {
+        return mapper.toResponse(service.cancelar(
+                new CancelarReservaCommand(id, principal.getName(), emailDe(jwt))));
+    }
+
+    /** Claim {@code email} del token; {@code null} si no viene (la reserva se hace igual, sin notificación). */
+    private static String emailDe(Jwt jwt) {
+        return jwt.getClaimAsString("email");
     }
 }

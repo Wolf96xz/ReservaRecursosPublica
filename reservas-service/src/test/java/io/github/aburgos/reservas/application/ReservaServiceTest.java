@@ -2,6 +2,7 @@ package io.github.aburgos.reservas.application;
 
 import io.github.aburgos.reservas.application.command.CancelarReservaCommand;
 import io.github.aburgos.reservas.application.command.CrearReservaCommand;
+import io.github.aburgos.reservas.application.port.EventPublisher;
 import io.github.aburgos.reservas.domain.exception.CancelacionNoPermitidaException;
 import io.github.aburgos.reservas.domain.exception.FueraDeHorarioException;
 import io.github.aburgos.reservas.domain.exception.RecursoNoEncontradoException;
@@ -16,7 +17,11 @@ import io.github.aburgos.reservas.domain.model.Reserva;
 import io.github.aburgos.reservas.domain.model.TipoRecurso;
 import io.github.aburgos.reservas.infrastructure.persistence.RecursoRepository;
 import io.github.aburgos.reservas.infrastructure.persistence.ReservaRepository;
+import io.github.aburgos.reservas.event.ReservaCancelada;
+import io.github.aburgos.reservas.event.ReservaCreada;
+import io.github.aburgos.reservas.event.ReservaEvent;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,8 +56,11 @@ class ReservaServiceTest {
     @Mock
     RecursoRepository recursos;
 
+    @Mock
+    EventPublisher eventos;
+
     private ReservaService service() {
-        return new ReservaService(reservas, recursos, RELOJ);
+        return new ReservaService(reservas, recursos, eventos, RELOJ);
     }
 
     private static Recurso recurso() {
@@ -81,6 +89,61 @@ class ReservaServiceTest {
         assertThat(creada.getUsuarioId()).isEqualTo("user-1");
         assertThat(creada.getRecursoId()).isEqualTo(r.getId());
         assertThat(creada.getCreadaEn()).isEqualTo(RELOJ.instant());
+    }
+
+    @Test
+    void crearPublicaReservaCreadaConLosDatosDelRecursoYElEmail() {
+        Recurso r = recurso();
+        when(recursos.findById(r.getId())).thenReturn(Optional.of(r));
+        when(reservas.existeSolapada(r.getId(), INICIO, FIN)).thenReturn(false);
+        when(reservas.saveAndFlush(any(Reserva.class))).thenAnswer(i -> i.getArgument(0));
+
+        Reserva creada = service().crear(new CrearReservaCommand(r.getId(), "user-1", INICIO, FIN, "ana@example.org"));
+
+        ReservaCreada evento = eventoPublicado(ReservaCreada.class);
+        assertThat(evento.eventId()).isNotNull();
+        assertThat(evento.reservaId()).isEqualTo(creada.getId());
+        assertThat(evento.recursoId()).isEqualTo(r.getId());
+        assertThat(evento.recursoNombre()).isEqualTo("Pista 1");
+        assertThat(evento.zona()).isEqualTo("Europe/Madrid");
+        assertThat(evento.usuarioId()).isEqualTo("user-1");
+        assertThat(evento.email()).isEqualTo("ana@example.org");
+        assertThat(evento.inicio()).isEqualTo(INICIO);
+        assertThat(evento.fin()).isEqualTo(FIN);
+        assertThat(evento.ocurridoEn()).isEqualTo(RELOJ.instant());
+    }
+
+    @Test
+    void crearSinEmailPublicaElEventoConEmailNuloYNoFalla() {
+        Recurso r = recurso();
+        when(recursos.findById(r.getId())).thenReturn(Optional.of(r));
+        when(reservas.saveAndFlush(any(Reserva.class))).thenAnswer(i -> i.getArgument(0));
+
+        service().crear(new CrearReservaCommand(r.getId(), "user-1", INICIO, FIN));
+
+        assertThat(eventoPublicado(ReservaCreada.class).email()).isNull();
+    }
+
+    @Test
+    void crearNoPublicaNingunEventoSiHaySolape() {
+        Recurso r = recurso();
+        when(recursos.findById(r.getId())).thenReturn(Optional.of(r));
+        when(reservas.existeSolapada(r.getId(), INICIO, FIN)).thenReturn(true);
+
+        assertThatThrownBy(() -> service().crear(new CrearReservaCommand(r.getId(), "u", INICIO, FIN)))
+                .isInstanceOf(ReservaSolapadaException.class);
+        verify(eventos, never()).publicar(any());
+    }
+
+    @Test
+    void crearNoPublicaNingunEventoSiLaBaseDeDatosRechazaElSolape() {
+        Recurso r = recurso();
+        when(recursos.findById(r.getId())).thenReturn(Optional.of(r));
+        when(reservas.saveAndFlush(any(Reserva.class))).thenThrow(new DataIntegrityViolationException("reserva_sin_solape"));
+
+        assertThatThrownBy(() -> service().crear(new CrearReservaCommand(r.getId(), "u", INICIO, FIN)))
+                .isInstanceOf(ReservaSolapadaException.class);
+        verify(eventos, never()).publicar(any());
     }
 
     @Test
@@ -143,13 +206,58 @@ class ReservaServiceTest {
     @Test
     void cancelarMarcaLaReservaComoCancelada() {
         Reserva reserva = reservaDe("user-1", Instant.parse("2026-01-12T10:00:00Z")); // 7 días después del reloj
-        when(reservas.findById(reserva.getId())).thenReturn(Optional.of(reserva));
-        when(reservas.saveAndFlush(reserva)).thenReturn(reserva);
+        stubCancelacion(reserva);
 
         Reserva cancelada = service().cancelar(new CancelarReservaCommand(reserva.getId(), "user-1"));
 
         assertThat(cancelada.getEstado()).isEqualTo(EstadoReserva.CANCELADA);
         assertThat(cancelada.getCanceladaEn()).isEqualTo(RELOJ.instant());
+    }
+
+    @Test
+    void cancelarPublicaReservaCanceladaConLosDatosDeLaReservaYElEmail() {
+        Reserva reserva = reservaDe("user-1", Instant.parse("2026-01-12T10:00:00Z"));
+        Recurso r = stubCancelacion(reserva);
+
+        service().cancelar(new CancelarReservaCommand(reserva.getId(), "user-1", "ana@example.org"));
+
+        ReservaCancelada evento = eventoPublicado(ReservaCancelada.class);
+        assertThat(evento.reservaId()).isEqualTo(reserva.getId());
+        assertThat(evento.recursoId()).isEqualTo(r.getId());
+        assertThat(evento.recursoNombre()).isEqualTo("Pista 1");
+        assertThat(evento.zona()).isEqualTo("Europe/Madrid");
+        assertThat(evento.usuarioId()).isEqualTo("user-1");
+        assertThat(evento.email()).isEqualTo("ana@example.org");
+        assertThat(evento.inicio()).isEqualTo(reserva.getFranja().inicio());
+        assertThat(evento.fin()).isEqualTo(reserva.getFranja().fin());
+        assertThat(evento.ocurridoEn()).isEqualTo(RELOJ.instant());
+    }
+
+    @Test
+    void cancelarFueraDelPlazoNoPublicaNingunEvento() {
+        Reserva reserva = reservaDe("user-1", Instant.parse("2026-01-05T20:00:00Z"));
+        when(reservas.findById(reserva.getId())).thenReturn(Optional.of(reserva));
+
+        assertThatThrownBy(() -> service().cancelar(new CancelarReservaCommand(reserva.getId(), "user-1")))
+                .isInstanceOf(CancelacionNoPermitidaException.class);
+        verify(eventos, never()).publicar(any());
+    }
+
+    /** Prepara los repositorios para cancelar la reserva y devuelve el recurso (con el mismo id que la reserva). */
+    private Recurso stubCancelacion(Reserva reserva) {
+        Recurso r = new Recurso(reserva.getRecursoId(), "Pista 1", TipoRecurso.PISTA,
+                java.time.ZoneId.of("Europe/Madrid"), new HorarioApertura(List.of()), true);
+        when(reservas.findById(reserva.getId())).thenReturn(Optional.of(reserva));
+        when(reservas.saveAndFlush(reserva)).thenReturn(reserva);
+        when(recursos.findById(reserva.getRecursoId())).thenReturn(Optional.of(r));
+        return r;
+    }
+
+    private <T extends ReservaEvent> T eventoPublicado(Class<T> tipo) {
+        ArgumentCaptor<ReservaEvent> captor = ArgumentCaptor.forClass(ReservaEvent.class);
+        verify(eventos).publicar(captor.capture());
+        assertThat(captor.getValue()).isInstanceOf(tipo);
+        return tipo.cast(captor.getValue());
     }
 
     @Test

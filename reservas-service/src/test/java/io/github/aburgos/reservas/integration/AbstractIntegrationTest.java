@@ -3,6 +3,7 @@ package io.github.aburgos.reservas.integration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -12,6 +13,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @Import(RelojFijoTestConfig.class)
+// Sin broker de Kafka en estos tests: ni el relay (reintentaría enviar cada segundo) ni la creación del
+// topic al arrancar. Los tests que sí usan Kafka lo reactivan (ver OutboxKafkaIntegrationTest).
+@TestPropertySource(properties = {
+        "reservas.outbox.relay.enabled=false",
+        "spring.kafka.admin.auto-create=false"
+})
 @Testcontainers(disabledWithoutDocker = true)
 abstract class AbstractIntegrationTest {
 

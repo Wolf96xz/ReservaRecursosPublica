@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static io.github.aburgos.reservas.TestJwt.ciudadano;
+import static io.github.aburgos.reservas.TestJwt.ciudadanoConEmail;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -92,6 +93,37 @@ class ReservaControllerTest {
                 .andExpect(status().isCreated());
 
         verify(service).crear(new CrearReservaCommand(RECURSO, "user-1", INICIO, FIN));
+    }
+
+    @Test
+    void crearLlevaElEmailDelTokenAlComando() throws Exception {
+        when(service.crear(any(CrearReservaCommand.class))).thenReturn(reserva("user-1"));
+
+        mvc.perform(post("/api/reservas").with(ciudadanoConEmail("user-1", "ana@example.org"))
+                        .contentType(MediaType.APPLICATION_JSON).content(CUERPO_VALIDO))
+                .andExpect(status().isCreated());
+
+        verify(service).crear(new CrearReservaCommand(RECURSO, "user-1", INICIO, FIN, "ana@example.org"));
+    }
+
+    @Test
+    void cancelarLlevaElEmailDelTokenAlComando() throws Exception {
+        UUID id = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(service.cancelar(any(CancelarReservaCommand.class))).thenReturn(reserva("user-1"));
+
+        mvc.perform(post("/api/reservas/" + id + "/cancelar").with(ciudadanoConEmail("user-1", "ana@example.org")))
+                .andExpect(status().isOk());
+
+        verify(service).cancelar(new CancelarReservaCommand(id, "user-1", "ana@example.org"));
+    }
+
+    @Test
+    void crearSinEmailEnElTokenReservaIgualConEmailNulo() throws Exception {
+        when(service.crear(any(CrearReservaCommand.class))).thenReturn(reserva("user-1"));
+
+        mvc.perform(crear(CUERPO_VALIDO)).andExpect(status().isCreated());
+
+        verify(service).crear(new CrearReservaCommand(RECURSO, "user-1", INICIO, FIN, null));
     }
 
     @Test

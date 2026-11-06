@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ReservaMapper {
 
-    public CrearReservaCommand toCommand(ReservaRequest request, String usuarioId) {
-        return new CrearReservaCommand(request.recursoId(), usuarioId, request.inicio(), request.fin());
+    public CrearReservaCommand toCommand(ReservaRequest request, String usuarioId, String email) {
+        return new CrearReservaCommand(request.recursoId(), usuarioId, request.inicio(), request.fin(), email);
     }
 
     public ReservaResponse toResponse(Reserva r) {

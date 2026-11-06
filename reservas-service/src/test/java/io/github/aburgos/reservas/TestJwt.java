@@ -22,6 +22,14 @@ public final class TestJwt {
         return conRoles(sub, "ciudadano");
     }
 
+    /** Ciudadano cuyo token trae el claim {@code email}, como el de Keycloak. */
+    public static RequestPostProcessor ciudadanoConEmail(String sub, String email) {
+        return jwt()
+                .jwt(token -> token.subject(sub).claim("email", email)
+                        .claim("realm_access", Map.of("roles", List.of("ciudadano"))))
+                .authorities(new KeycloakRealmRoleConverter());
+    }
+
     public static RequestPostProcessor gestor(String sub) {
         return conRoles(sub, "gestor");
     }

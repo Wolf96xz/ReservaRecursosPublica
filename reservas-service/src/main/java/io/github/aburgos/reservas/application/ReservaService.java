@@ -2,6 +2,7 @@ package io.github.aburgos.reservas.application;
 
 import io.github.aburgos.reservas.application.command.CancelarReservaCommand;
 import io.github.aburgos.reservas.application.command.CrearReservaCommand;
+import io.github.aburgos.reservas.application.port.EventPublisher;
 import io.github.aburgos.reservas.domain.exception.RecursoNoEncontradoException;
 import io.github.aburgos.reservas.domain.exception.ReservaNoEncontradaException;
 import io.github.aburgos.reservas.domain.exception.ReservaSolapadaException;
@@ -9,6 +10,8 @@ import io.github.aburgos.reservas.domain.model.FranjaHoraria;
 import io.github.aburgos.reservas.domain.model.Recurso;
 import io.github.aburgos.reservas.domain.model.Reserva;
 import io.github.aburgos.reservas.domain.policy.PoliticaCancelacion;
+import io.github.aburgos.reservas.event.ReservaCancelada;
+import io.github.aburgos.reservas.event.ReservaCreada;
 import io.github.aburgos.reservas.infrastructure.persistence.RecursoRepository;
 import io.github.aburgos.reservas.infrastructure.persistence.ReservaRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,11 +27,14 @@ public class ReservaService {
 
     private final ReservaRepository reservas;
     private final RecursoRepository recursos;
+    private final EventPublisher eventos;
     private final Clock clock;
 
-    public ReservaService(ReservaRepository reservas, RecursoRepository recursos, Clock clock) {
+    public ReservaService(ReservaRepository reservas, RecursoRepository recursos,
+                          EventPublisher eventos, Clock clock) {
         this.reservas = reservas;
         this.recursos = recursos;
+        this.eventos = eventos;
         this.clock = clock;
     }
 
@@ -47,18 +53,30 @@ public class ReservaService {
         if (reservas.existeSolapada(recurso.getId(), franja.inicio(), franja.fin())) {
             throw solapada(recurso.getId(), franja);
         }
+        Reserva guardada;
         try {
-            return reservas.saveAndFlush(reserva);
+            guardada = reservas.saveAndFlush(reserva);
         } catch (DataIntegrityViolationException e) {
             throw solapada(recurso.getId(), franja);
         }
+        // Mismo @Transactional que el guardado: o se confirman la reserva y su evento, o ninguno de los dos.
+        eventos.publicar(new ReservaCreada(UUID.randomUUID(), guardada.getId(), recurso.getId(),
+                recurso.getNombre(), recurso.getZona().getId(), guardada.getUsuarioId(), cmd.email(),
+                franja.inicio(), franja.fin(), clock.instant()));
+        return guardada;
     }
 
     @Transactional
     public Reserva cancelar(CancelarReservaCommand cmd) {
         Reserva reserva = buscarDelUsuario(cmd.reservaId(), cmd.usuarioId());
         reserva.cancelar(clock, PoliticaCancelacion.POR_DEFECTO);
-        return reservas.saveAndFlush(reserva);
+        Reserva guardada = reservas.saveAndFlush(reserva);
+        Recurso recurso = recursos.findById(guardada.getRecursoId())
+                .orElseThrow(() -> new RecursoNoEncontradoException(guardada.getRecursoId()));
+        eventos.publicar(new ReservaCancelada(UUID.randomUUID(), guardada.getId(), recurso.getId(),
+                recurso.getNombre(), recurso.getZona().getId(), guardada.getUsuarioId(), cmd.email(),
+                guardada.getFranja().inicio(), guardada.getFranja().fin(), guardada.getCanceladaEn()));
+        return guardada;
     }
 
     @Transactional(readOnly = true)

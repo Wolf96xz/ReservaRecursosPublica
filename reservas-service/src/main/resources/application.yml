@@ -4,6 +4,15 @@ spring:
     hibernate:
       # El esquema lo gestiona Flyway; Hibernate solo comprueba que el mapeo encaja con él.
       ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      # Los serializadores por defecto de Boot ya son StringSerializer: el payload del outbox es JSON en texto.
+      acks: all
+      properties:
+        # Con el broker caído, send() bloquea como mucho esto (el relay lo hace dentro de una transacción
+        # con filas bloqueadas): mejor fallar pronto y reintentar en la siguiente pasada.
+        max.block.ms: 5000
   security:
     oauth2:
       resourceserver:
@@ -11,3 +20,12 @@ spring:
           # Con issuer-uri el decodificador es perezoso: no contacta con Keycloak al arrancar, solo al
           # validar el primer token. Por eso la app (y los tests) arrancan sin Keycloak.
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/reservas}
+
+reservas:
+  outbox:
+    # Purga de eventos ya publicados: el payload puede contener el email (dato personal).
+    retencion-dias: 7
+    relay:
+      enabled: true
+      intervalo-ms: 1000
+      lote: 50
