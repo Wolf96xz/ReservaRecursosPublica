@@ -29,10 +29,10 @@ dependencias se comprueba con un test ArchUnit.
 |---|---|---|
 | 1 | Dominio puro | Hecha |
 | 2 | Persistencia (Flyway, JPA, restricción anti-solapamiento) | Hecha |
-| 3 | Casos de uso y API REST | Hecha (tests de persistencia/integración pendientes de verificar en CI) |
-| 4 | Seguridad con Keycloak | Pendiente |
-| 5 | Mensajería: Outbox, Kafka, notificaciones | Pendiente |
-| 6 | Gateway | Pendiente |
+| 3 | Casos de uso y API REST | Hecha (los tests de persistencia e integración solo corren en el CI) |
+| 4 | Seguridad: resource server JWT y roles de Keycloak | Hecha (probada con JWT simulados; sin Keycloak real todavía) |
+| 5 | Mensajería: Outbox, Kafka, notificaciones (idempotencia, reintentos, DLT) | Hecha (los tests con Kafka real solo corren en el CI) |
+| 6 | Gateway | Pendiente (hay un esqueleto sin tests) |
 | 7 | Front-end Angular | Pendiente |
 | 8 | Docker, docker-compose y observabilidad | Pendiente |
 
